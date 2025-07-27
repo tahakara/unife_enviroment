@@ -1,0 +1,123 @@
+
+networks:
+  traefik_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+        - subnet: "fd00:dead:beef::/48"
+
+
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "[::]:80:80/tcp"
+      - "[::]:443:443/tcp"
+    volumes:
+      - /home/dockerVol/traefik/data:/data
+    command:
+      - --providers.file.directory=/data/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80   
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.postgres.address=:5432
+      - --entrypoints.redis.address=:6379
+      - --api.dashboard=true
+      - --log.level=INFO
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:
+      - /home/dockerVol/portainer/data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.tahakara.dev`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls=true"
+      - "traefik.http.routers.portainer.priority=5"
+      - "traefik.http.routers.portainer.middlewares=whitelist,cloudflare"
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:
+      - /home/dockerVol/postgres/data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.tcp.routers.postgres.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.postgres.entrypoints=postgres"
+      - "traefik.tcp.routers.postgres.tls.passthrough=true"
+      - "traefik.tcp.routers.postgres.priority=5"
+      - "traefik.tcp.routers.postgres.middlewares=whitelist,cloudflare"
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:
+      - /home/dockerVol/redis/data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.tcp.routers.redis.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.redis.entrypoints=redis"
+      - "traefik.tcp.routers.redis.tls.passthrough=true"
+      - "traefik.tcp.routers.redis.priority=5"
+      - "traefik.tcp.routers.redis.middlewares=whitelist,cloudflare"
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:
+      - /home/dockerVol/redisinsight/data:/db
+    environment:
+      - REDISINSIGHT_AUTH_ENABLED=false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redisinsight.rule=Host(`redisinsight.tahakara.dev`)"
+      - "traefik.http.routers.redisinsight.entrypoints=websecure"
+      - "traefik.http.routers.redisinsight.tls=true"
+      - "traefik.http.routers.redisinsight.priority=5"
+      - "traefik.http.routers.redisinsight.middlewares=whitelist,cloudflare"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:    
+      - /home/dockerVol/pgadmin/data:/var/lib/pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@tahakara.dev
+      - PGADMIN_DEFAULT_PASSWORD=adminpass
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.tahakara.dev`)"
+      - "traefik.http.routers.pgadmin.entrypoints=websecure"
+      - "traefik.http.routers.pgadmin.tls=true"
+      - "traefik.http.routers.pgadmin.priority=5"
+      - "traefik.http.routers.pgadmin.middlewares=whitelist,cloudflare"
