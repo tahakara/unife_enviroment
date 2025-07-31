@@ -1,4 +1,5 @@
 
+
 networks:
   traefik_net:
     driver: bridge
@@ -7,6 +8,8 @@ networks:
       config:
         - subnet: 172.21.0.0/16
         - subnet: "fd00:dead:beef::/48"
+  tailscale_net:
+    driver: bridge
 
 
 services:
@@ -33,12 +36,31 @@ services:
       - --api.dashboard=true
       - --log.level=INFO
 
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    restart: unless-stopped
+    networks:
+      - tailscale_net
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - TS_AUTHKEY= # Optional: set your auth key here or via .env
+      - TS_EXTRA_ARGS=--advertise-exit-node
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - /home/dockerVol/tailscale:/var/lib/tailscale
+    command: tailscaled
+    privileged: true
+    
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
     restart: unless-stopped
     networks:
       - traefik_net
+      - tailscale_net
     volumes:
       - /home/dockerVol/portainer/data:/data
     labels:
@@ -55,6 +77,7 @@ services:
     restart: unless-stopped
     networks:
       - traefik_net
+      - tailscale_net
     volumes:
       - /home/dockerVol/postgres/data:/var/lib/postgresql/data
     environment:
@@ -75,6 +98,7 @@ services:
     restart: unless-stopped
     networks:
       - traefik_net
+      - tailscale_net
     volumes:
       - /home/dockerVol/redis/data:/data
     labels:
